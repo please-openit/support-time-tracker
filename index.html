@@ -1,0 +1,215 @@
+<html>
+
+<head>
+    <title>Time tracker</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
+        integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Please-open.it time tracker">
+    <meta name="author" content="please-open.it">
+    <meta name="robots" content="nofollow">
+    <link href="./css/creative.css" rel="stylesheet">
+</head>
+
+
+<body id="page-top">
+    <nav class="navbar navbar-expand-lg navbar-light fixed-top" id="mainNav">
+        <div class="container">
+          <a class="navbar-brand js-scroll-trigger" href="">
+            <img src="logo.svg" height="42" width="42"> Please Open It Time Tracking</a>
+        </div>
+      </nav>
+
+    <header class="masthead text-center text-white d-flex bg-dark" style="min-height: 10%;">
+        <div class="container my-auto ">
+            <h3 class="text-uppercase">
+                <strong>Are you correctly authenticated ? </strong>
+            </h3>
+            <hr>
+        </div>
+        </div>
+    </header>
+
+
+    <section id="portfolio" class="masthead">
+        <div class="row justify-content-center">
+            <div class="col-8">
+                <div id="project">
+
+                </div>
+                <div id="milestones">
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script id="projectTemplate" type="text/template">
+        <h2 class="section-heading">{{name}}</h2>
+        <p>{{description}}</p>
+    </script>
+
+    <script id="milestonesTemplate" type="text/template">
+            {{#.}}
+                <hr class="my-4 hr-lg"/>
+                <h4>{{milestone.title}}</h4>
+                <p class="md">{{milestone.description}}</p>
+                <div class="progress" style="height: 30px;">
+                    <div class="progress-bar" role="progressbar" style="width: {{milestone.percent}}%;" aria-valuenow="{{milestone.consumed}}" aria-valuemin="0" aria-valuemax="{{milestone.credit}}">{{milestone.percent}}%</div>
+                </div>
+                <p>
+                    Consumed : {{milestone.consumed | human }} h
+                </p>
+                <p>
+                    Total : {{milestone.credit | human }} h
+                </p>
+                {{#issues}}
+                    <h5>{{title}}</h5>
+                    <p>{{due_date }}</p>
+                    <p class="md">{{description}}</p>
+                    <p>Credited : {{time_stats.human_time_estimate}}
+                    <p>Spent : {{time_stats.human_total_time_spent}}</p>
+                {{/issues}}
+            {{/.}}
+        </script>
+
+
+</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p"
+    crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/3.0.1/mustache.js"></script>
+<script src="js/mustache-wax.js"></script>
+<script>
+
+    Mustache.Formatters = {
+        human: function (str) {
+            return str / 3600;
+        },
+    };
+
+    token = getUrlParameter("token");
+    projectId = getUrlParameter("project");
+
+
+    getProjects();
+    getMilestones();
+    function getProjects() {
+        jQuery.ajax({
+            url: "https://GITLABINSTANCE/api/v4/projects/",
+            success: function (data) {
+                projectId = data[0].id;
+                var template = $("#projectTemplate").html();
+                var output = Mustache.render(template, data[0]);
+                $("#project").append(output);
+            },
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader('PRIVATE-TOKEN', token);
+            },
+            async: false,
+        }).fail(function (response) {
+            console.error('Error: ' + response.responseText);
+        });
+    }
+
+    function getMilestones() {
+        jQuery.ajax({
+            url: "https://GITLABINSTANCE/api/v4/projects/" + projectId + "/milestones/",
+            success: function (data) {
+                milestones = [];
+                i = 0;
+                for (milestone of data) {
+                    milestones[i] = new Object();
+                    milestones[i].issues = getMilestoneIssues(milestone["id"]);
+                    milestones[i].milestone = milestone;
+                    milestones[i].milestone.credit = 0;
+                    milestones[i].milestone.consumed = 0;
+                    for (issue of milestones[i].issues) {
+                        milestones[i].milestone.credit += Number(issue.time_stats.time_estimate);
+                        milestones[i].milestone.consumed += Number(issue.time_stats.total_time_spent);
+                    }
+                    milestones[i].milestone.percent = Math.round((milestones[i].milestone.consumed * 100) / milestones[i].milestone.credit);
+
+                    i++;
+                }
+                var template = $("#milestonesTemplate").html();
+                var output = Mustache.render(template, milestones);
+                $("#milestones").append(output);
+            },
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader('PRIVATE-TOKEN', token);
+            },
+            async: false
+        }).fail(function (response) {
+            console.error('Error: ' + response.responseText);
+        });
+    }
+
+    function getMilestoneIssues(milestoneId) {
+
+        var result;
+        jQuery.ajax({
+            url: "https://GITLABINSTANCE/api/v4/projects/" + projectId + "/milestones/" + milestoneId + "/issues",
+            success: function (data) {
+                result = data;
+            },
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader('PRIVATE-TOKEN', token);
+            },
+            async: false,
+        }).fail(function (response) {
+            console.error('Error: ' + response.responseText);
+        });
+        return result;
+
+
+    }
+
+    function getUrlParameter(sParam) {
+        var sPageURL = window.location.search.substring(1),
+            sURLVariables = sPageURL.split('&'),
+            sParameterName,
+            i;
+
+        for (i = 0; i < sURLVariables.length; i++) {
+            sParameterName = sURLVariables[i].split('=');
+
+            if (sParameterName[0] === sParam) {
+                return sParameterName[1] === undefined ? true : decodeURIComponent(sParameterName[1]);
+            }
+        }
+    };
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js" integrity="sha384-+YQ4JLhjyBLPDQt//I+STsc9iw4uQqACwlvpslubQzn4u2UU2UFM80nGisd026JF" crossorigin="anonymous"></script>
+
+  <!-- Custom scripts for this template -->
+  <script src="./js/creative.min.js"></script>
+  <script src="./js/showdown.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    var converter = new showdown.Converter();
+
+    document.querySelectorAll('p.md').forEach(block => {
+        var html = converter.makeHtml(block.textContent);
+        block.innerHTML = html;
+
+      mermaid.initialize({
+        startOnLoad: true, mermaid: {
+          callback: function (id) {
+          }
+        }
+      });
+    });
+    document.querySelectorAll('code').forEach(block => {
+        // then highlight each
+        hljs.highlightBlock(block);
+      });
+  </script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script>
+
+</html>
